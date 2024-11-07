@@ -6,7 +6,7 @@ from datetime import timedelta
 from reactor_2 import initialize_grid, get_x_positions, create_adjacency_map, run_genetic_algorithm
 
 # Variable for the filename
-filename = 'hyperparameter_results_0.csv'
+filename = 'hyperparameter_results_1.csv'
 
 # Function to generate random hyperparameter combinations
 def generate_hyperparameters(num_samples=100):
@@ -50,7 +50,7 @@ def get_fitness_after_training(pop_size=100, gens=20, mut_rate=0.05, cross_rate=
 
     return best_fitness
 
-def evaluate_hyperparameters(hyperparameter_sets, runs_per_set=3):
+def evaluate_hyperparameters(hyperparameter_sets, runs_per_set=5):
     results = []
     total_runs = len(hyperparameter_sets) * runs_per_set
     start_time = time.time()
@@ -91,7 +91,7 @@ def evaluate_hyperparameters(hyperparameter_sets, runs_per_set=3):
     return results
 
 if __name__ == "__main__":
-    hyperparameter_sets = generate_hyperparameters(num_samples=20)  # Adjust num_samples as needed
+    hyperparameter_sets = generate_hyperparameters(num_samples=10)  # Adjust num_samples as needed
     data = evaluate_hyperparameters(hyperparameter_sets, runs_per_set=5)  # Run each set 5 times for averaging
 
     # Convert results to a DataFrame
