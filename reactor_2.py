@@ -1,6 +1,7 @@
 from enum import Enum
 import random
 import copy
+import time
 
 # from reactor_vis import *  # Ensure this module is available or replace with appropriate imports
 
@@ -21,18 +22,24 @@ SINK_NAMES = {"HSA", "HSB"}
 HEAT_GENERATION = {
     TileType.PA.value: 259.5,
     TileType.PB.value: 6912.0,
-    TileType.PC.value: 75000.0
+    TileType.PC.value: 117188.0
 }
 
 # Heat absorption capacities for heat sinks (negative floats)
 HEAT_SINK_CAPACITY = {
-    TileType.HSA.value: -9244,  # Negative since they absorb heat
-    TileType.HSB.value: -27733
+    TileType.HSA.value: -11556,  # Negative since they absorb heat
+    TileType.HSB.value: -165302
 }
 
 IsoAmount = 0.30 # Percent that the Iso tile increases adjacent tiles' heat generation. EX: 0.05 = 5%
 
-log_generations = False
+log_generations = True
+
+def estimate_time_remaining(start_time, current_generation, total_generations):
+    elapsed_time = time.time() - start_time
+    average_time_per_gen = elapsed_time / (current_generation + 1)
+    remaining_time = average_time_per_gen * (total_generations - current_generation - 1)
+    print(f"Estimated Time Remaining: {remaining_time:.2f} seconds")
 
 def initialize_grid(test_grid=False):
     """
@@ -399,7 +406,7 @@ def create_next_generation(population, fitness_scores, crossover_rate, mutation_
         
         # Ensure parents are different
         attempts = 0
-        max_attempts = 10  # To prevent infinite loops
+        max_attempts = len(population)  # To prevent infinite loops
         while parent1 == parent2 and attempts < max_attempts:
             parent2 = tournament_selection(population, fitness_scores, tournament_rate)
             attempts += 1
@@ -458,7 +465,10 @@ def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_ra
     
     best_fitness = float('-inf')
     best_individual = None
-    
+
+    # Start time for tracking
+    start_time = time.time()
+
     # Main evolution loop
     for gen in range(generations):
         # Evaluate current population
@@ -474,6 +484,8 @@ def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_ra
         
         if log_generations:
             print(f"Generation {gen + 1}: Best Fitness = {best_fitness}")
+            # Print estimated time remaining
+            estimate_time_remaining(start_time, gen, generations)
         
         # Create next generation
         population = create_next_generation(population, fitness_scores, 
@@ -539,11 +551,11 @@ if __name__ == "__main__":
     grid = initialize_grid(test_grid=False)  # Set to True for smaller grid during testing
     
     # Genetic Algorithm Parameters
-    population_size = 100
-    generations = 20
+    population_size = 2000
+    generations = 1000
     mutation_rate = 0.05
-    crossover_rate = 0.7
-    tournament_rate = 0.05  # Changed from tournament_size to tournament_rate (e.g., 5%)
+    crossover_rate = 0.9
+    tournament_rate = 0.01 # Changed from tournament_size to tournament_rate (e.g., 5%)
     
     # Run the genetic algorithm
     best_solution, best_fitness = run_genetic_algorithm(
@@ -559,14 +571,14 @@ if __name__ == "__main__":
     print("\nOptimization Complete!")
     print(f"Best Fitness Score: {best_fitness}")
     
-    # # Display the best solution
-    # x_positions = get_x_positions(grid)
-    # adjacency_map = create_adjacency_map(x_positions, grid)
+    # Display the best solution
+    x_positions = get_x_positions(grid)
+    adjacency_map = create_adjacency_map(x_positions, grid)
     
-    # print("\nBest Layout:")
-    # print_individual_grid(best_solution, adjacency_map, grid, floats=False)
-    # print("\nHeat Values:")
-    # print_individual_grid(best_solution, adjacency_map, grid, floats=True)
+    print("\nBest Layout:")
+    print_individual_grid(best_solution, adjacency_map, grid, floats=False)
+    print("\nHeat Values:")
+    print_individual_grid(best_solution, adjacency_map, grid, floats=True)
     
-    # print("TRIMMED:")
-    # trim_and_print(best_solution, adjacency_map, grid)
+    print("TRIMMED:")
+    trim_and_print(best_solution, adjacency_map, grid)
