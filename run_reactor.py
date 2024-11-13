@@ -4,9 +4,32 @@ import pandas as pd
 import time
 from datetime import timedelta
 from reactor_2 import initialize_grid, get_x_positions, create_adjacency_map, run_genetic_algorithm
+import itertools
+import numpy as np
+
+def generate_even_hyperparameter_grid(n=4):
+    # Define ranges for each hyperparameter
+    population_range = np.linspace(100, 1000, n, dtype=int)
+    generations_range = np.linspace(100, 100, 1, dtype=int)
+    mutation_rate_range = np.round(np.linspace(0, 0.25, n), 3)
+    crossover_rate_range = np.round(np.linspace(0.5, 1.0, n), 3)
+    tournament_rate_range = np.round(np.linspace(0.01, 0.75, n), 3)
+    
+    # Generate all combinations of hyperparameters
+    grid = list(itertools.product(
+        population_range,
+        generations_range,
+        mutation_rate_range,
+        crossover_rate_range,
+        tournament_rate_range
+    ))
+
+    # Return the combinations and the length of the grid
+    return grid, len(grid)
+
 
 # Variable for the filename
-filename = 'hyperparameter_results_1.csv'
+filename = 'grid_0.csv'
 
 # Function to generate random hyperparameter combinations
 def generate_hyperparameters(num_samples=100):
@@ -91,8 +114,12 @@ def evaluate_hyperparameters(hyperparameter_sets, runs_per_set=5):
     return results
 
 if __name__ == "__main__":
-    hyperparameter_sets = generate_hyperparameters(num_samples=10)  # Adjust num_samples as needed
-    data = evaluate_hyperparameters(hyperparameter_sets, runs_per_set=5)  # Run each set 5 times for averaging
+    # Example usage
+    hyperparameter_grid, grid_length = generate_even_hyperparameter_grid(n=4)
+    print(f"Generated {grid_length} hyperparameter combinations.")
+    print(hyperparameter_grid[:5])  # Display the first 5 combinations
+
+    data = evaluate_hyperparameters(hyperparameter_grid, runs_per_set=5)  # Run each set 5 times for averaging
 
     # Convert results to a DataFrame
     df = pd.DataFrame(data)

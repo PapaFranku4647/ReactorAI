@@ -20,20 +20,20 @@ SINK_NAMES = {"HSA", "HSB"}
 
 # Heat generation values for power sources (positive floats)
 HEAT_GENERATION = {
-    TileType.PA.value: 259.5,
-    TileType.PB.value: 6912.0,
-    TileType.PC.value: 117188.0
+    TileType.PA.value: 3,
+    TileType.PB.value: 380.0,
+    TileType.PC.value: 117187.0 # 146483
 }
 
 # Heat absorption capacities for heat sinks (negative floats)
 HEAT_SINK_CAPACITY = {
-    TileType.HSA.value: -11556,  # Negative since they absorb heat
-    TileType.HSB.value: -165302
+    TileType.HSA.value: -44081,  # Negative since they absorb heat
+    TileType.HSB.value: -132243
 }
 
-IsoAmount = 0.30 # Percent that the Iso tile increases adjacent tiles' heat generation. EX: 0.05 = 5%
+IsoAmount = 0.05 # Percent that the Iso tile increases adjacent tiles' heat generation. EX: 0.05 = 5%
 
-log_generations = False
+log_generations = True
 
 def estimate_time_remaining(start_time, current_generation, total_generations):
     elapsed_time = time.time() - start_time
@@ -47,27 +47,29 @@ def initialize_grid(test_grid=False):
     'X' is a valid tile, and '_' is one that cannot be placed on.
     """
     # Uncomment the original large grid for actual use
-    grid = [
-        ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_"],
-        ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_", "_"],
-        ["X", "_", "_", "_", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_", "_"],
-        ["_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_"],
-        ["_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "X", "X", "X", "X"],
-        ["_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "X", "X", "X", "X"],
-        ["_", "_", "_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "X", "X", "X", "_"],
-        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "X", "_", "_"],
-        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "X", "X", "X", "_", "_", "_", "_"],
-        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "X", "_", "_", "_", "_", "_"]
-    ]
     
-    # Smaller grid for demonstration
-    if(test_grid):
+    grid = [[0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1],
+            [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
+            [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            ]
+    
+    if test_grid:
         grid = [
-            ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_"],
-            ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_", "_"],
-            ["X", "_", "_", "_", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_", "_"],
-            ["_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_"]
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+            [1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0],
+            [0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0]
         ]
+        
+        
     
     return grid
 
@@ -90,7 +92,7 @@ def get_adjacent_cells(i, j, grid):
     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
     for dx, dy in directions:
         x, y = i + dx, j + dy
-        if 0 <= x < num_rows and 0 <= y < num_cols and grid[x][y] != "_":
+        if 0 <= x < num_rows and 0 <= y < num_cols and grid[x][y] != 0:
             adjacent.append((x, y))
     return adjacent
 
@@ -104,7 +106,7 @@ def get_x_positions(grid):
     Returns:
         list of tuples: Positions marked with 'X' as (row, column).
     """
-    x_positions = [(i, j) for i, row in enumerate(grid) for j, cell in enumerate(row) if cell == "X"]
+    x_positions = [(i, j) for i, row in enumerate(grid) for j, cell in enumerate(row) if cell == 1]
     return x_positions
 
 def create_adjacency_map(x_positions, grid):
@@ -551,8 +553,8 @@ if __name__ == "__main__":
     grid = initialize_grid(test_grid=False)  # Set to True for smaller grid during testing
     
     # Genetic Algorithm Parameters
-    population_size = 1000
-    generations = 300
+    population_size = 2000
+    generations = 1000
     mutation_rate = 0.05
     crossover_rate = 0.9
     tournament_rate = 0.01 # Changed from tournament_size to tournament_rate (e.g., 5%)
