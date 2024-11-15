@@ -33,7 +33,7 @@ HEAT_SINK_CAPACITY = {
 
 IsoAmount = 0.30 # Percent that the Iso tile increases adjacent tiles' heat generation. EX: 0.05 = 5%
 
-log_generations = True
+log_generations = False
 
 def estimate_time_remaining(start_time, current_generation, total_generations):
     elapsed_time = time.time() - start_time
@@ -481,11 +481,22 @@ def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_ra
         if current_best_fitness > best_fitness:
             best_fitness = current_best_fitness
             best_individual = copy.deepcopy(population[current_best_idx])
+            stall_count = 0
+        else:
+            stall_count += 1
         
         if log_generations:
             print(f"Generation {gen + 1}: Best Fitness = {best_fitness}")
             # Print estimated time remaining
             estimate_time_remaining(start_time, gen, generations)
+        
+        if(stall_count > 10):
+            # print()
+            # print("############")
+            # print(f"STALLED AT GENERATION {gen + 1}")
+            # print("############")
+            
+            return best_individual, best_fitness, gen + 1
         
         # Create next generation
         population = create_next_generation(population, fitness_scores, 
@@ -551,21 +562,30 @@ if __name__ == "__main__":
     grid = initialize_grid(test_grid=False)  # Set to True for smaller grid during testing
     
     # Genetic Algorithm Parameters
-    population_size = 4_000
-    generations = 400
-    mutation_rate = 0.03
-    crossover_rate = 0.95   # (61/64) # (31/32) #  (123/128) # 
-    tournament_rate = 0.0025 # Changed from tournament_size to tournament_rate (e.g., 5%)
+    population_size = 500
+    generations = 2000
+    mutation_rate = 0.1 # [0, 0.01, 0.02, 0.03, ..., 0.1]
+    crossover_rate = 0.5   # [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    tournament_rate = 0.02 # Changed from tournament_size to tournament_rate (e.g., 5%)
     
-    # Run the genetic algorithm
-    best_solution, best_fitness = run_genetic_algorithm(
-        grid,
-        population_size=population_size,
-        generations=generations,
-        mutation_rate=mutation_rate,
-        crossover_rate=crossover_rate,
-        tournament_rate=tournament_rate
-    )
+    num_runs = 3    
+    
+    for crossover_rate in [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+        for mutation_rate in [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]:
+            avg_stag = 0
+            for run in range(num_runs):
+                # Run the genetic algorithm
+                best_solution, best_fitness, gen_stalled = run_genetic_algorithm(
+                    grid,
+                    population_size=population_size,
+                    generations=generations,
+                    mutation_rate=mutation_rate,
+                    crossover_rate=crossover_rate,
+                    tournament_rate=tournament_rate
+                )
+                avg_stag+=gen_stalled
+            avg_stag/=num_runs
+            print(f"Crossover Rate: {crossover_rate}, Mutation Rate: {mutation_rate}, Avg Stagnation: {avg_stag}")
     
     # Print results
     print("\nOptimization Complete!")
