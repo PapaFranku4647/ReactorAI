@@ -2,8 +2,9 @@ from enum import Enum
 import random
 import copy
 import time
-
-# from reactor_vis import *  # Ensure this module is available or replace with appropriate imports
+import numpy as np
+from scipy.stats import t
+import sys
 
 # Define Tile Types using Enum for clarity
 class TileType(Enum):
@@ -15,31 +16,25 @@ class TileType(Enum):
     I = 5     # Iso Tile
     EMPTY = 6 # Represents an empty or non-eligible cell
 
-HEAT_NAMES = {"PA", "PB", "PC"}
+HEAT_NAMES = {"PA", "PB", "PC"}    
 SINK_NAMES = {"HSA", "HSB"}
 
 # Heat generation values for power sources (positive floats)
 HEAT_GENERATION = {
-    TileType.PA.value: 10800,
-    TileType.PB.value: 228881,
-    TileType.PC.value: 1200000 # 146483 # 
+    TileType.PA.value: 259.5,
+    TileType.PB.value: 6912.0,
+    TileType.PC.value: 117188.0
 }
 
 # Heat absorption capacities for heat sinks (negative floats)
 HEAT_SINK_CAPACITY = {
-    TileType.HSA.value: -1002281,  # Negative since they absorb heat
-    TileType.HSB.value: -3000000
+    TileType.HSA.value: -11556,  # Negative since they absorb heat
+    TileType.HSB.value: -165302
 }
 
-IsoAmount = 0.45 # Percent that the Iso tile increases adjacent tiles' heat generation. EX: 0.05 = 5%
+IsoAmount = 0.30 # Percent that the Iso tile increases adjacent tiles' heat generation. EX: 0.05 = 5%
 
-log_generations = True
-
-def estimate_time_remaining(start_time, current_generation, total_generations):
-    elapsed_time = time.time() - start_time
-    average_time_per_gen = elapsed_time / (current_generation + 1)
-    remaining_time = average_time_per_gen * (total_generations - current_generation - 1)
-    print(f"Estimated Time Remaining: {remaining_time:.2f} seconds")
+log_generations = False
 
 def initialize_grid(test_grid=False):
     """
@@ -47,30 +42,28 @@ def initialize_grid(test_grid=False):
     'X' is a valid tile, and '_' is one that cannot be placed on.
     """
     # Uncomment the original large grid for actual use
-
-    grid = [[0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1],
-            [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
-            [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            ]
-
-    if test_grid:
+    grid = [
+        ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_"],
+        ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_", "_"],
+        ["X", "_", "_", "_", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_", "_"],
+        ["_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "X", "X", "X", "X"],
+        ["_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "X", "X", "X", "X"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "X", "X", "X", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "X", "X", "X", "X", "X", "X", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "X", "X", "X", "_", "_", "_", "_"],
+        ["_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "_", "X", "_", "_", "_", "_", "_"]
+    ]
+    
+    # Smaller grid for demonstration
+    if(test_grid):
         grid = [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-            [1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0],
-            [0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0]
+            ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_"],
+            ["X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "X", "_", "_", "_"],
+            ["X", "_", "_", "_", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_", "_"],
+            ["_", "_", "_", "_", "X", "X", "X", "X", "X", "_", "_", "_", "X", "X", "X", "_", "_"]
         ]
-
-
-
+    
     return grid
 
 def get_adjacent_cells(i, j, grid):
@@ -92,7 +85,7 @@ def get_adjacent_cells(i, j, grid):
     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
     for dx, dy in directions:
         x, y = i + dx, j + dy
-        if 0 <= x < num_rows and 0 <= y < num_cols and grid[x][y] != 0:
+        if 0 <= x < num_rows and 0 <= y < num_cols and grid[x][y] != "_":
             adjacent.append((x, y))
     return adjacent
 
@@ -106,7 +99,7 @@ def get_x_positions(grid):
     Returns:
         list of tuples: Positions marked with 'X' as (row, column).
     """
-    x_positions = [(i, j) for i, row in enumerate(grid) for j, cell in enumerate(row) if cell == 1]
+    x_positions = [(i, j) for i, row in enumerate(grid) for j, cell in enumerate(row) if cell == "X"]
     return x_positions
 
 def create_adjacency_map(x_positions, grid):
@@ -139,50 +132,27 @@ def initialize_population(pop_size, x_positions):
     population = [[random.randint(0, 5) for _ in x_positions] for _ in range(pop_size)]
     return population
 
-def reconstruct_grid(individual, adjacency_map, grid):
-    """
-    Reconstructs the grid with tile assignments based on the individual's genome.
-
-    Parameters:
-        individual (list of int): Tile assignments for each 'X' cell.
-        adjacency_map (dict): Mapping of each 'X' cell to its adjacent cells.
-        grid (list of lists): The original grid structure.
-
-    Returns:
-        list of lists: New grid with tile assignments.
-    """
-
-    new_grid = [row.copy() for row in grid]
-
-    for idx, gene in enumerate(individual):
-        pos = list(adjacency_map.keys())[idx]
-        row, col = pos
-        tile_type = TileType(gene).name
-        new_grid[row][col] = tile_type
-
-    return new_grid
-
 def print_individual_grid(individual, adjacency_map, grid, floats=True):
     """
     Prints the grid layout of the individual's tile assignments.
-
+    
     Parameters:
         individual (list of int): Tile assignments for each 'X' cell.
         adjacency_map (dict): Mapping of each 'X' cell to its adjacent cells.
         grid (list of lists): The original grid structure.
         floats (bool): If True, replaces tile names with their heat generation or absorption values.
-
+        
     Returns:
         None
     """
     # Create a new grid with assigned tile types
     display_grid = [row.copy() for row in grid]
     x_positions = list(adjacency_map.keys())
-
+    
     for idx, gene in enumerate(individual):
         pos = x_positions[idx]
         row, col = pos
-
+        
         if floats:
             # Show heat values instead of tile names
             if gene in HEAT_GENERATION:
@@ -202,25 +172,15 @@ def print_individual_grid(individual, adjacency_map, grid, floats=True):
         print(" ".join(f"{cell:>7}" for cell in row))
 
 
-def check_individual_overload(individual, adjacency_map, grid):
-    """
-    Placeholder for the overload checking function.
-    Implement the actual logic as per your reactor's requirements.
-    """
-    # Implement the overload checking logic here
-    # This function should return True if the individual is overloaded, else False
-    pass  # Replace with actual implementation
-
-
 def check_individual_fitness(individual, adjacency_map, grid):
     """
     Evaluates the fitness of an individual based on the reactor's heat balance.
-
+    
     Parameters:
         individual (list of int): Tile assignments for each 'X' cell.
         adjacency_map (dict): Mapping of each 'X' cell to its adjacent cells.
         grid (list of lists): The reactor grid.
-
+    
     Returns:
         float: Fitness score (higher is better).
     """
@@ -228,13 +188,13 @@ def check_individual_fitness(individual, adjacency_map, grid):
 
     name_map = [row.copy() for row in grid]
     val_map = [row.copy() for row in grid]
-
+    
     for idx, gene in enumerate(individual):
         pos = x_positions[idx]
         row, col = pos
         tile_type = TileType(gene)
         name_map[row][col] = tile_type.name
-
+        
         if gene in HEAT_GENERATION:
             val_map[row][col] = HEAT_GENERATION[gene]
         elif gene in HEAT_SINK_CAPACITY:
@@ -246,10 +206,10 @@ def check_individual_fitness(individual, adjacency_map, grid):
     # Step 4. Get Iso Multiplier Map (1 + iso_adj_map(heat_cell) * iso_multiplier)
 
     iso_map = [row.copy() for row in grid]
-
+    
     for (row, col) in x_positions:
         iso_map[row][col] = 1.0
-
+    
     for (row, col) in x_positions:
         if val_map[row][col] > 0:
             for (adj_row, adj_col) in get_adjacent_cells(row, col, grid):
@@ -264,10 +224,10 @@ def check_individual_fitness(individual, adjacency_map, grid):
 
 
     adj_sink_map = [row.copy() for row in grid]
-
+    
     for (row, col) in x_positions:
         adj_sink_map[row][col] = 0
-
+    
     for (row, col) in x_positions:
         if val_map[row][col] > 0:
             for (adj_row, adj_col) in get_adjacent_cells(row, col, grid):
@@ -276,7 +236,7 @@ def check_individual_fitness(individual, adjacency_map, grid):
 
 
     val_map_heat_added = [row.copy() for row in val_map]
-
+    
     for (row, col) in x_positions:
         if name_map[row][col] in HEAT_NAMES:
             for (adj_row, adj_col) in get_adjacent_cells(row, col, grid):
@@ -284,7 +244,7 @@ def check_individual_fitness(individual, adjacency_map, grid):
                     val_map_heat_added[adj_row][adj_col] += val_map[row][col] / (adj_sink_map[row][col])
 
     generated_heat_map = [row.copy() for row in val_map]
-
+    
     for row in range(len(generated_heat_map)):
         for idx in range(len(generated_heat_map[row])):
             generated_heat_map[row][idx] = 0
@@ -296,18 +256,17 @@ def check_individual_fitness(individual, adjacency_map, grid):
             else:
                 generated_heat_map[row][col] = abs(val_map_heat_added[row][col] - val_map[row][col])
 
-
     return sum(heat for row in generated_heat_map for heat in row)
 
 
 def mutate(individual, mutation_rate):
     """
     Mutates an individual by randomly changing its genes based on the mutation rate.
-
+    
     Parameters:
         individual (list): The individual to mutate.
         mutation_rate (float): The probability of each gene being mutated.
-
+        
     Returns:
         None: The individual is mutated in place.
     """
@@ -334,22 +293,22 @@ def mutate(individual, mutation_rate):
 def tournament_selection(population, fitness_scores, tournament_rate):
     """
     Selects an individual using tournament selection based on a tournament rate.
-
+    
     Parameters:
         population (list): List of individuals.
         fitness_scores (dict): Dictionary mapping individual indices to their fitness scores.
         tournament_rate (float): Percentage of the population to participate in each tournament.
-
+        
     Returns:
         list: Selected individual.
     """
     pop_size = len(population)
     # Calculate tournament size as a percentage of population size
     tournament_size = max(2, int(pop_size * tournament_rate))
-
+    
     # Ensure tournament_size does not exceed population size
     tournament_size = min(tournament_size, pop_size)
-
+    
     tournament = random.sample(range(pop_size), tournament_size)
     tournament_fitnesses = [(i, fitness_scores[i]) for i in tournament]
     winner_idx = max(tournament_fitnesses, key=lambda x: x[1])[0]
@@ -359,17 +318,17 @@ def tournament_selection(population, fitness_scores, tournament_rate):
 def crossover(parent1, parent2, crossover_rate):
     """
     Performs uniform crossover between two parents.
-
+    
     Parameters:
         parent1, parent2 (list): Parent individuals.
         crossover_rate (float): Probability of crossover occurring.
-
+        
     Returns:
         tuple: Two offspring individuals.
     """
     if random.random() > crossover_rate:
         return parent1.copy(), parent2.copy()
-
+    
     child1, child2 = [], []
     for gene1, gene2 in zip(parent1, parent2):
         if random.random() < 0.5:
@@ -384,56 +343,56 @@ def crossover(parent1, parent2, crossover_rate):
 def create_next_generation(population, fitness_scores, crossover_rate, mutation_rate, tournament_rate):
     """
     Creates the next generation using selection, crossover, and mutation.
-
+    
     Parameters:
         population (list): Current population.
         fitness_scores (dict): Dictionary mapping individual indices to their fitness scores.
         crossover_rate (float): Crossover rate for GA.
         mutation_rate (float): Mutation rate for GA.
         tournament_rate (float): Percentage of the population participating in each tournament.
-
+        
     Returns:
         list: New population.
     """
     new_population = []
-
+    
     # Elitism: Keep the best individual
     best_idx = max(fitness_scores.items(), key=lambda x: x[1])[0]
     new_population.append(copy.deepcopy(population[best_idx]))
-
+    
     # Generate rest of the population
     while len(new_population) < len(population):
         parent1 = tournament_selection(population, fitness_scores, tournament_rate)
         parent2 = tournament_selection(population, fitness_scores, tournament_rate)
-
+        
         # Ensure parents are different
         attempts = 0
         max_attempts = len(population)  # To prevent infinite loops
         while parent1 == parent2 and attempts < max_attempts:
             parent2 = tournament_selection(population, fitness_scores, tournament_rate)
             attempts += 1
-
+        
         offspring1, offspring2 = crossover(parent1, parent2, crossover_rate)
-
+        
         mutate(offspring1, mutation_rate)
         mutate(offspring2, mutation_rate)
-
+        
         new_population.append(offspring1)
         if len(new_population) < len(population):
             new_population.append(offspring2)
-
+    
     return new_population
 
 
 def evaluate_population(population, adjacency_map, grid):
     """
     Evaluates the entire population and returns fitness scores.
-
+    
     Parameters:
         population (list): List of individuals.
         adjacency_map (dict): Mapping of cell positions to adjacent cells.
         grid (list): The reactor grid.
-
+        
     Returns:
         dict: Mapping of individual indices to fitness scores.
     """
@@ -442,12 +401,61 @@ def evaluate_population(population, adjacency_map, grid):
         fitness_scores[idx] = check_individual_fitness(individual, adjacency_map, grid)
     return fitness_scores
 
+def clear_progress_bar():
+    """
+    Clears the progress bar from the console.
+    """
+    sys.stdout.write('\r')
+    sys.stdout.write(' ' * 80)
+    sys.stdout.write('\r')
+    sys.stdout.flush()
 
-def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_rate=0.05,
+def format_time(seconds):
+    """
+    Formats time in seconds into a string with days, hours, minutes, and seconds.
+
+    Parameters:
+        seconds (float): Time in seconds.
+
+    Returns:
+        str: Formatted time string.
+    """
+    days = int(seconds // 86400)
+    hours = int((seconds % 86400) // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    if days > 0:
+        return f"{days}d {hours:02d}:{minutes:02d}:{secs:02d}"
+    else:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+def update_progress_bar(progress, total, elapsed_time):
+    """
+    Updates the progress bar with estimated time remaining, including days and hours beyond 24.
+
+    Parameters:
+        progress (int): Current progress count.
+        total (int): Total count.
+        elapsed_time (float): Elapsed time in seconds.
+    """
+    percent = (progress / total) * 100
+    bar_length = 50  # Modify this to change the length of the progress bar
+    filled_length = int(bar_length * progress // total)
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+
+    avg_time_per_unit = elapsed_time / progress if progress > 0 else 0
+    remaining_time = avg_time_per_unit * (total - progress)
+    time_str = format_time(remaining_time)
+    
+    sys.stdout.write(f'\rProgress: |{bar}| {percent:.2f}% Complete, ETA: {time_str}')
+    sys.stdout.flush()
+
+def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_rate=0.05, 
                           crossover_rate=0.7, tournament_rate=0.05):
     """
     Runs the genetic algorithm to optimize reactor layout.
-
+    
     Parameters:
         grid (list): The reactor grid.
         population_size (int): Number of individuals in the population.
@@ -455,51 +463,51 @@ def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_ra
         mutation_rate (float): Mutation rate for GA.
         crossover_rate (float): Crossover rate for GA.
         tournament_rate (float): Percentage of the population participating in each tournament.
-
+        
     Returns:
         tuple: Best individual and its fitness score.
     """
     x_positions = get_x_positions(grid)
     adjacency_map = create_adjacency_map(x_positions, grid)
-
+    
     # Initialize population
     population = initialize_population(population_size, x_positions)
-
+    
     best_fitness = float('-inf')
     best_individual = None
 
-    # Start time for tracking
-    start_time = time.time()
+    stall_count = 0
 
     # Main evolution loop
     for gen in range(generations):
         # Evaluate current population
         fitness_scores = evaluate_population(population, adjacency_map, grid)
-
+        
         # Track best solution
         current_best_idx = max(fitness_scores.items(), key=lambda x: x[1])[0]
         current_best_fitness = fitness_scores[current_best_idx]
-
+        
         if current_best_fitness > best_fitness:
             best_fitness = current_best_fitness
             best_individual = copy.deepcopy(population[current_best_idx])
+            stall_count = 0
+        else:
+            stall_count += 1
 
-        if log_generations:
-            print(f"Generation {gen + 1}: Best Fitness = {best_fitness}")
-            # Print estimated time remaining
-            estimate_time_remaining(start_time, gen, generations)
-
+        # if(stall_count > 0.25*(gen+1) and stall_count > 10):
+        #     return best_individual, best_fitness, gen + 1
+        
         # Create next generation
-        population = create_next_generation(population, fitness_scores,
+        population = create_next_generation(population, fitness_scores, 
                                             crossover_rate, mutation_rate, tournament_rate)
 
-    return best_individual, best_fitness
+    return best_individual, best_fitness, generations
 
 
 def trim_and_print(individual, adjacency_map, grid):
     """
     Removes heat sources that are not adjacent to any heat sinks and prints the result.
-
+    
     Parameters:
         individual (list): List of tile assignments.
         adjacency_map (dict): Mapping of cell positions to adjacent cells.
@@ -508,7 +516,7 @@ def trim_and_print(individual, adjacency_map, grid):
     # Create maps for analysis
     x_positions = list(adjacency_map.keys())
     modified_individual = individual.copy()
-
+    
     # Create name map for reference
     name_map = [row.copy() for row in grid]
     for idx, gene in enumerate(individual):
@@ -516,14 +524,14 @@ def trim_and_print(individual, adjacency_map, grid):
         row, col = pos
         tile_type = TileType(gene).name
         name_map[row][col] = tile_type
-
+    
     # Check each position
     changes_made = False
     for idx, gene in enumerate(individual):
         pos = x_positions[idx]
         row, col = pos
         tile_type = TileType(gene).name
-
+        
         # If it's a heat source, check if it's adjacent to any heat sink
         if tile_type in HEAT_NAMES:
             has_adjacent_sink = False
@@ -532,18 +540,18 @@ def trim_and_print(individual, adjacency_map, grid):
                 if adj_type in SINK_NAMES:
                     has_adjacent_sink = True
                     break
-
+            
             # If no adjacent heat sink, convert to empty tile
             if not has_adjacent_sink:
                 modified_individual[idx] = TileType.EMPTY.value
                 changes_made = True
-
+    
     # Print results
     print("\nOptimized Layout (Heat sources without sinks removed):")
     print_individual_grid(modified_individual, adjacency_map, grid, False)
     print("\nOptimized Heat Values:")
     print_individual_grid(modified_individual, adjacency_map, grid, True)
-
+    
     if changes_made:
         print("\nNote: Some heat sources were removed because they had no adjacent heat sinks.")
 
@@ -551,36 +559,76 @@ def trim_and_print(individual, adjacency_map, grid):
 if __name__ == "__main__":
     # Initialize the grid
     grid = initialize_grid(test_grid=False)  # Set to True for smaller grid during testing
-
+    
     # Genetic Algorithm Parameters
-    population_size = 200_000
-    generations = 500
-    mutation_rate = 0.03
-    crossover_rate = 0.99
-    tournament_rate = 0.0005 # Changed from tournament_size to tournament_rate (e.g., 5%)
+    population_size = 500
+    generations = 1000
+    mutation_rate = 0.1 # [0, 0.01, 0.02, 0.03, ..., 0.1]
+    crossover_rate = 0.5   # [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    tournament_rate = 0.02 # Changed from tournament_size to tournament_rate (e.g., 5%)
+    
+    num_runs = 50
+    stagnation_generations = []
+    fitness_stag = []
 
-    # Run the genetic algorithm
-    best_solution, best_fitness = run_genetic_algorithm(
-        grid,
-        population_size=population_size,
-        generations=generations,
-        mutation_rate=mutation_rate,
-        crossover_rate=crossover_rate,
-        tournament_rate=tournament_rate
-    )
+    # Overall progress tracking
+    crossover_rates = [0.5, 0.6, 0.7, 0.8, 0.9, 1].reverse()
+    mutation_rates = [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10].reverse()
+    total_iterations = len(crossover_rates) * len(mutation_rates) * num_runs
+    iteration_count = 0
+    overall_start_time = time.time()
+
+    for crossover_rate in crossover_rates:
+        for mutation_rate in mutation_rates:
+            avg_stag = 0
+            avg_fitness = 0
+            stagnation_generations.clear()  # Reset stagnation generations for new parameter set
+            fitness_stag.clear()
+            for run in range(num_runs):
+                # Run the genetic algorithm and collect stagnation generation data
+                best_solution, best_fitness, gen_stalled = run_genetic_algorithm(
+                    grid,
+                    population_size=population_size,
+                    generations=generations,
+                    mutation_rate=mutation_rate,
+                    crossover_rate=crossover_rate,
+                    tournament_rate=tournament_rate
+                )
+                avg_stag += gen_stalled
+                avg_fitness += best_fitness
+
+                stagnation_generations.append(gen_stalled)  # Store stagnation generation for each run
+                fitness_stag.append(best_fitness)
+
+                # Update overall progress bar
+                iteration_count += 1
+                elapsed_time = time.time() - overall_start_time
+                update_progress_bar(iteration_count, total_iterations, elapsed_time)
+
+            # Compute mean and standard error
+            mean_stagnation = np.mean(stagnation_generations)
+            mean_fitness = np.mean(fitness_stag)
+
+            standard_error = np.std(stagnation_generations, ddof=1) / np.sqrt(num_runs)
+            standard_error_fitness = np.std(fitness_stag, ddof=1) / np.sqrt(num_runs)
+
+            # 95% confidence interval using t-distribution
+            t_value = t.ppf(0.975, df=num_runs - 1)  # two-tailed for 95% CI
+            confidence_interval = (mean_stagnation - t_value * standard_error, mean_stagnation + t_value * standard_error)
+            confidence_interval_fitness = (mean_fitness - t_value * standard_error_fitness, mean_fitness + t_value * standard_error_fitness)
+
+            # Average stagnation calculation
+            avg_stag /= num_runs
+            avg_fitness /= num_runs
+            clear_progress_bar()
+            print(f"Crossover Rate: {crossover_rate}, Mutation Rate: {mutation_rate}")
+            print(f"Mean Stagnation: {mean_stagnation}, SE: {standard_error}, 95% CI: {confidence_interval}")
+            print(f"Mean Fitness: {mean_fitness}, SE: {standard_error_fitness}, 95% CI: {confidence_interval_fitness}")
+            print()
+
+    # Clear overall progress bar after completion
+    clear_progress_bar()
 
     # Print results
     print("\nOptimization Complete!")
     print(f"Best Fitness Score: {best_fitness}")
-
-    # Display the best solution
-    x_positions = get_x_positions(grid)
-    adjacency_map = create_adjacency_map(x_positions, grid)
-
-    print("\nBest Layout:")
-    print_individual_grid(best_solution, adjacency_map, grid, floats=False)
-    print("\nHeat Values:")
-    print_individual_grid(best_solution, adjacency_map, grid, floats=True)
-
-    print("TRIMMED:")
-    trim_and_print(best_solution, adjacency_map, grid)

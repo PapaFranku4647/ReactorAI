@@ -2,8 +2,9 @@ from enum import Enum
 import random
 import copy
 import time
-
-# from reactor_vis import *  # Ensure this module is available or replace with appropriate imports
+import numpy as np
+from scipy.stats import t
+import sys
 
 # Define Tile Types using Enum for clarity
 class TileType(Enum):
@@ -34,12 +35,6 @@ HEAT_SINK_CAPACITY = {
 IsoAmount = 0.30 # Percent that the Iso tile increases adjacent tiles' heat generation. EX: 0.05 = 5%
 
 log_generations = False
-
-def estimate_time_remaining(start_time, current_generation, total_generations):
-    elapsed_time = time.time() - start_time
-    average_time_per_gen = elapsed_time / (current_generation + 1)
-    remaining_time = average_time_per_gen * (total_generations - current_generation - 1)
-    print(f"Estimated Time Remaining: {remaining_time:.2f} seconds")
 
 def initialize_grid(test_grid=False):
     """
@@ -137,29 +132,6 @@ def initialize_population(pop_size, x_positions):
     population = [[random.randint(0, 5) for _ in x_positions] for _ in range(pop_size)]
     return population
 
-def reconstruct_grid(individual, adjacency_map, grid):
-    """
-    Reconstructs the grid with tile assignments based on the individual's genome.
-
-    Parameters:
-        individual (list of int): Tile assignments for each 'X' cell.
-        adjacency_map (dict): Mapping of each 'X' cell to its adjacent cells.
-        grid (list of lists): The original grid structure.
-
-    Returns:
-        list of lists: New grid with tile assignments.
-    """
-    
-    new_grid = [row.copy() for row in grid]
-    
-    for idx, gene in enumerate(individual):
-        pos = list(adjacency_map.keys())[idx]
-        row, col = pos
-        tile_type = TileType(gene).name
-        new_grid[row][col] = tile_type
-    
-    return new_grid
-    
 def print_individual_grid(individual, adjacency_map, grid, floats=True):
     """
     Prints the grid layout of the individual's tile assignments.
@@ -198,16 +170,6 @@ def print_individual_grid(individual, adjacency_map, grid, floats=True):
     print("\nIndividual Grid Layout:")
     for row in display_grid:
         print(" ".join(f"{cell:>7}" for cell in row))
-
-
-def check_individual_overload(individual, adjacency_map, grid):
-    """
-    Placeholder for the overload checking function.
-    Implement the actual logic as per your reactor's requirements.
-    """
-    # Implement the overload checking logic here
-    # This function should return True if the individual is overloaded, else False
-    pass  # Replace with actual implementation
 
 
 def check_individual_fitness(individual, adjacency_map, grid):
@@ -253,7 +215,7 @@ def check_individual_fitness(individual, adjacency_map, grid):
             for (adj_row, adj_col) in get_adjacent_cells(row, col, grid):
                 if name_map[adj_row][adj_col] == "I":
                     iso_map[row][col] += IsoAmount
-    
+
 
     # Step 5. Apply Iso Mult to Value Map
     for (row, col) in x_positions:
@@ -293,7 +255,6 @@ def check_individual_fitness(individual, adjacency_map, grid):
                 generated_heat_map[row][col] = -abs(val_map_heat_added[row][col] - val_map[row][col])
             else:
                 generated_heat_map[row][col] = abs(val_map_heat_added[row][col] - val_map[row][col])
-
 
     return sum(heat for row in generated_heat_map for heat in row)
 
@@ -440,6 +401,55 @@ def evaluate_population(population, adjacency_map, grid):
         fitness_scores[idx] = check_individual_fitness(individual, adjacency_map, grid)
     return fitness_scores
 
+def clear_progress_bar():
+    """
+    Clears the progress bar from the console.
+    """
+    sys.stdout.write('\r')
+    sys.stdout.write(' ' * 80)
+    sys.stdout.write('\r')
+    sys.stdout.flush()
+
+def format_time(seconds):
+    """
+    Formats time in seconds into a string with days, hours, minutes, and seconds.
+
+    Parameters:
+        seconds (float): Time in seconds.
+
+    Returns:
+        str: Formatted time string.
+    """
+    days = int(seconds // 86400)
+    hours = int((seconds % 86400) // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    if days > 0:
+        return f"{days}d {hours:02d}:{minutes:02d}:{secs:02d}"
+    else:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+def update_progress_bar(progress, total, elapsed_time):
+    """
+    Updates the progress bar with estimated time remaining, including days and hours beyond 24.
+
+    Parameters:
+        progress (int): Current progress count.
+        total (int): Total count.
+        elapsed_time (float): Elapsed time in seconds.
+    """
+    percent = (progress / total) * 100
+    bar_length = 50  # Modify this to change the length of the progress bar
+    filled_length = int(bar_length * progress // total)
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+
+    avg_time_per_unit = elapsed_time / progress if progress > 0 else 0
+    remaining_time = avg_time_per_unit * (total - progress)
+    time_str = format_time(remaining_time)
+    
+    sys.stdout.write(f'\rProgress: |{bar}| {percent:.2f}% Complete, ETA: {time_str}')
+    sys.stdout.flush()
 
 def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_rate=0.05, 
                           crossover_rate=0.7, tournament_rate=0.05):
@@ -466,8 +476,7 @@ def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_ra
     best_fitness = float('-inf')
     best_individual = None
 
-    # Start time for tracking
-    start_time = time.time()
+    stall_count = 0
 
     # Main evolution loop
     for gen in range(generations):
@@ -484,25 +493,15 @@ def run_genetic_algorithm(grid, population_size=100, generations=20, mutation_ra
             stall_count = 0
         else:
             stall_count += 1
-        
-        if log_generations:
-            print(f"Generation {gen + 1}: Best Fitness = {best_fitness}")
-            # Print estimated time remaining
-            estimate_time_remaining(start_time, gen, generations)
-        
-        if(stall_count > 10):
-            # print()
-            # print("############")
-            # print(f"STALLED AT GENERATION {gen + 1}")
-            # print("############")
-            
-            return best_individual, best_fitness, gen + 1
+
+        # if(stall_count > 0.25*(gen+1) and stall_count > 10):
+        #     return best_individual, best_fitness, gen + 1
         
         # Create next generation
         population = create_next_generation(population, fitness_scores, 
                                             crossover_rate, mutation_rate, tournament_rate)
-    
-    return best_individual, best_fitness
+
+    return best_individual, best_fitness, generations
 
 
 def trim_and_print(individual, adjacency_map, grid):
@@ -563,18 +562,30 @@ if __name__ == "__main__":
     
     # Genetic Algorithm Parameters
     population_size = 500
-    generations = 2000
+    generations = 750
     mutation_rate = 0.1 # [0, 0.01, 0.02, 0.03, ..., 0.1]
     crossover_rate = 0.5   # [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     tournament_rate = 0.02 # Changed from tournament_size to tournament_rate (e.g., 5%)
     
-    num_runs = 3    
-    
-    for crossover_rate in [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-        for mutation_rate in [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]:
+    num_runs = 40
+    stagnation_generations = []
+    fitness_stag = []
+
+    # Overall progress tracking
+    crossover_rates = [0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    mutation_rates = [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
+    total_iterations = len(crossover_rates) * len(mutation_rates) * num_runs
+    iteration_count = 0
+    overall_start_time = time.time()
+
+    for crossover_rate in crossover_rates:
+        for mutation_rate in mutation_rates:
             avg_stag = 0
+            avg_fitness = 0
+            stagnation_generations.clear()  # Reset stagnation generations for new parameter set
+            fitness_stag.clear()
             for run in range(num_runs):
-                # Run the genetic algorithm
+                # Run the genetic algorithm and collect stagnation generation data
                 best_solution, best_fitness, gen_stalled = run_genetic_algorithm(
                     grid,
                     population_size=population_size,
@@ -583,22 +594,41 @@ if __name__ == "__main__":
                     crossover_rate=crossover_rate,
                     tournament_rate=tournament_rate
                 )
-                avg_stag+=gen_stalled
-            avg_stag/=num_runs
-            print(f"Crossover Rate: {crossover_rate}, Mutation Rate: {mutation_rate}, Avg Stagnation: {avg_stag}")
-    
+                avg_stag += gen_stalled
+                avg_fitness += best_fitness
+
+                stagnation_generations.append(gen_stalled)  # Store stagnation generation for each run
+                fitness_stag.append(best_fitness)
+
+                # Update overall progress bar
+                iteration_count += 1
+                elapsed_time = time.time() - overall_start_time
+                update_progress_bar(iteration_count, total_iterations, elapsed_time)
+
+            # Compute mean and standard error
+            mean_stagnation = np.mean(stagnation_generations)
+            mean_fitness = np.mean(fitness_stag)
+
+            standard_error = np.std(stagnation_generations, ddof=1) / np.sqrt(num_runs)
+            standard_error_fitness = np.std(fitness_stag, ddof=1) / np.sqrt(num_runs)
+
+            # 95% confidence interval using t-distribution
+            t_value = t.ppf(0.975, df=num_runs - 1)  # two-tailed for 95% CI
+            confidence_interval = (mean_stagnation - t_value * standard_error, mean_stagnation + t_value * standard_error)
+            confidence_interval_fitness = (mean_fitness - t_value * standard_error_fitness, mean_fitness + t_value * standard_error_fitness)
+
+            # Average stagnation calculation
+            avg_stag /= num_runs
+            avg_fitness /= num_runs
+            clear_progress_bar()
+            print(f"Crossover Rate: {crossover_rate}, Mutation Rate: {mutation_rate}")
+            print(f"Mean Stagnation: {mean_stagnation}, SE: {standard_error}, 95% CI: {confidence_interval}")
+            print(f"Mean Fitness: {mean_fitness}, SE: {standard_error_fitness}, 95% CI: {confidence_interval_fitness}")
+            print()
+
+    # Clear overall progress bar after completion
+    clear_progress_bar()
+
     # Print results
     print("\nOptimization Complete!")
     print(f"Best Fitness Score: {best_fitness}")
-    
-    # # Display the best solution
-    # x_positions = get_x_positions(grid)
-    # adjacency_map = create_adjacency_map(x_positions, grid)
-    
-    # print("\nBest Layout:")
-    # print_individual_grid(best_solution, adjacency_map, grid, floats=False)
-    # print("\nHeat Values:")
-    # print_individual_grid(best_solution, adjacency_map, grid, floats=True)
-    
-    # print("TRIMMED:")
-    # trim_and_print(best_solution, adjacency_map, grid)
